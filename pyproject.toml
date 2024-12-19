@@ -17,7 +17,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Atmospheric Science"
 ]
 dynamic = ["readme"]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = ["numpy", "xarray", "python-dateutil"]
 
 [project.optional-dependencies]
@@ -33,6 +33,4 @@ line-length = 100
 [tool.mypy]
 files = ["src", "example"]
 allow_redefinition = true
-show_error_context = false
-show_column_numbers = true
 ignore_missing_imports = true
