@@ -13,3 +13,6 @@ __pycache__/
 *.so
 *.dylib
 *.egg-info/
+
+# Runtime DLLs (bundled during wheel build)
+src/lowtran/libs/*.dll

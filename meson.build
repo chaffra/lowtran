@@ -40,15 +40,29 @@ py.install_sources(
 )
 
 # Install bundled DLLs for Windows (Fortran runtime dependencies)
+# DLLs are copied during wheel build process (see .github/workflows/build-wheels.yml)
+# For local development, DLLs are not required if mingw64 is in PATH
 if host_machine.system() == 'windows'
-  py.install_sources(
-    [
-      'src/lowtran/libs/libgfortran-5.dll',
-      'src/lowtran/libs/libgcc_s_seh-1.dll',
-      'src/lowtran/libs/libquadmath-0.dll',
-      'src/lowtran/libs/libwinpthread-1.dll',
-    ],
-    pure : false,
-    subdir : 'lowtran/libs'
-  )
+  dll_files = [
+    'src/lowtran/libs/libgfortran-5.dll',
+    'src/lowtran/libs/libgcc_s_seh-1.dll',
+    'src/lowtran/libs/libquadmath-0.dll',
+    'src/lowtran/libs/libwinpthread-1.dll',
+  ]
+
+  # Only install DLLs if they exist (e.g., during wheel build)
+  dll_list = []
+  foreach dll : dll_files
+    if import('fs').exists(dll)
+      dll_list += [dll]
+    endif
+  endforeach
+
+  if dll_list.length() > 0
+    py.install_sources(
+      dll_list,
+      pure : false,
+      subdir : 'lowtran/libs'
+    )
+  endif
 endif
