@@ -5,21 +5,17 @@ import numpy as np
 from typing import Any
 from pathlib import Path
 import importlib.util
-import distutils.sysconfig
+import sysconfig
 import os
 from types import ModuleType
 
-from .cmake import build
-
 
 def check() -> ModuleType:
-    try:
-        lowtran7 = import_f2py_mod("lowtran7")
-    except ImportError:
-        src = Path(__file__).parent
-        build(source_dir=src, build_dir=src / "build")
-        lowtran7 = import_f2py_mod("lowtran7")
+    """Import the lowtran7 extension module.
 
+    The extension should be built with Meson and installed alongside this package.
+    """
+    lowtran7 = import_f2py_mod("lowtran7")
     return lowtran7
 
 
@@ -27,16 +23,27 @@ def import_f2py_mod(name: str) -> ModuleType:
 
     if os.name == "nt":
         # https://github.com/space-physics/lowtran/issues/19
-        # code inspired by scipy._distributor_init.py for loading DLLs on Window
-        dll_path = (Path(__file__) / "../build/lowtran7/.libs").resolve()
-        if dll_path.is_dir():
-            # add the folder for Python 3.8 and above
-            logging.info(f"Adding {dll_path} to DLL search path")
-            os.add_dll_directory(dll_path)  # type: ignore
-        else:
-            logging.info(f"Could not find {dll_path} to add to DLL search path")
+        # code inspired by scipy._distributor_init.py for loading DLLs on Windows
 
-    mod_name = name + distutils.sysconfig.get_config_var("EXT_SUFFIX")  # type: ignore
+        # First, try to use bundled DLLs (installed alongside the package)
+        bundled_libs = Path(__file__).parent / "libs"
+        if bundled_libs.is_dir():
+            logging.info(f"Adding {bundled_libs} to DLL search path (bundled runtime)")
+            os.add_dll_directory(str(bundled_libs))  # type: ignore
+        else:
+            # Fallback: look for mingw64/bin for gfortran runtime DLLs
+            mingw_paths = [
+                Path("C:/mingw64/bin"),
+                Path("C:/msys64/mingw64/bin"),
+                Path("C:/msys64/ucrt64/bin"),
+            ]
+            for mingw_path in mingw_paths:
+                if mingw_path.is_dir():
+                    logging.info(f"Adding {mingw_path} to DLL search path for Fortran runtime")
+                    os.add_dll_directory(str(mingw_path))  # type: ignore
+                    break
+
+    mod_name = name + sysconfig.get_config_var("EXT_SUFFIX")  # type: ignore
     mod_file = Path(__file__).parent / mod_name
     if not mod_file.is_file():
         raise ModuleNotFoundError(mod_file)

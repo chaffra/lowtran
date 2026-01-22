@@ -3,7 +3,7 @@
 .pytest_cache/
 .cache/
 
-
+build/
 dist/
 
 __pycache__/
