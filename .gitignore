@@ -2,6 +2,8 @@
 .mypy_cache/
 .pytest_cache/
 .cache/
+.claude/
+.vscode/
 
 build/
 dist/

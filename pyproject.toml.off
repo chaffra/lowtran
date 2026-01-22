@@ -1,6 +1,6 @@
 [build-system]
-requires = ["meson-python>=0.16.0", "numpy"]
-build-backend = "mesonpy"
+requires = ["setuptools>=61.0.0", "wheel", "numpy"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "lowtran"
@@ -16,19 +16,16 @@ classifiers = [
   "Programming Language :: Fortran",
   "Topic :: Scientific/Engineering :: Atmospheric Science"
 ]
-readme = {"file" = "README.md", "content-type" = "text/markdown"}
-
-maintainers = [
-  { name = "Chaffra Affouda", email = "caffouda@anduril.com" },
-]
-
+dynamic = ["readme"]
 requires-python = ">=3.9"
-dependencies = ["numpy", "python-dateutil", "pandas"]
+dependencies = ["numpy", "xarray", "python-dateutil"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+tests = ["pytest"]
 lint = ["flake8", "flake8-bugbear", "flake8-builtins", "flake8-blind-except", "mypy", "types-python-dateutil"]
 
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}
 
 [tool.black]
 line-length = 100
@@ -36,6 +33,4 @@ line-length = 100
 [tool.mypy]
 files = ["src", "example"]
 allow_redefinition = true
-show_error_context = false
-show_column_numbers = true
 ignore_missing_imports = true

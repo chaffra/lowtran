@@ -1,6 +1,5 @@
 from __future__ import annotations
 import logging
-import xarray
 import numpy as np
 from typing import Any
 from pathlib import Path
@@ -8,6 +7,53 @@ import importlib.util
 import sysconfig
 import os
 from types import ModuleType
+
+
+class LowtranResult:
+    """Structured container for Lowtran atmospheric model results.
+
+    Attributes:
+        transmission: (time, wavelength, angle) transmission values
+        radiance: (time, wavelength, angle) radiance values
+        irradiance: (time, wavelength, angle) irradiance values
+        pathscatter: (time, wavelength, angle) path scatter values
+        time: time coordinates
+        wavelength_nm: wavelength coordinates in nm
+        angle_deg: angle coordinates in degrees
+    """
+    __slots__ = ('transmission', 'radiance', 'irradiance', 'pathscatter',
+                 'time', 'wavelength_nm', 'angle_deg')
+
+    def __init__(self, transmission: np.ndarray, radiance: np.ndarray,
+                 irradiance: np.ndarray, pathscatter: np.ndarray,
+                 time: np.ndarray, wavelength_nm: np.ndarray, angle_deg: np.ndarray):
+        self.transmission = transmission
+        self.radiance = radiance
+        self.irradiance = irradiance
+        self.pathscatter = pathscatter
+        self.time = time
+        self.wavelength_nm = wavelength_nm
+        self.angle_deg = angle_deg
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        """Dictionary-style access for backward compatibility."""
+        return getattr(self, key)
+
+    def __repr__(self) -> str:
+        return (f"LowtranResult(shape={self.transmission.shape}, "
+                f"wavelength=[{self.wavelength_nm[0]:.1f}, {self.wavelength_nm[-1]:.1f}] nm)")
+
+    def squeeze(self):
+        """Return a new result with singleton dimensions removed."""
+        return LowtranResult(
+            transmission=self.transmission.squeeze(),
+            radiance=self.radiance.squeeze(),
+            irradiance=self.irradiance.squeeze(),
+            pathscatter=self.pathscatter.squeeze(),
+            time=self.time.squeeze() if self.time.ndim > 0 else self.time,
+            wavelength_nm=self.wavelength_nm,
+            angle_deg=self.angle_deg.squeeze() if self.angle_deg.ndim > 0 else self.angle_deg
+        )
 
 
 def check() -> ModuleType:
@@ -95,8 +141,8 @@ def loopuserdef(c1: dict[str, Any]):
     ), "WMOL, P, T,time must be vectors of equal length"
 
     N = len(P)
-    # %% 3-D array indexed by metadata
-    TR = xarray.Dataset(coords={"time": time, "wavelength_nm": None, "angle_deg": None})
+    # %% accumulate results
+    results = []
 
     for i in range(N):
         c = c1.copy()
@@ -105,11 +151,18 @@ def loopuserdef(c1: dict[str, Any]):
         c["t"] = T[i]
         c["time"] = time[i]
 
-        TR = TR.merge(golowtran(c))
+        results.append(golowtran(c))
 
-    #   TR = TR.sort_index(axis=0) # put times in order, sometimes CSV is not monotonic in time.
-
-    return TR
+    # Concatenate along time axis
+    return LowtranResult(
+        transmission=np.concatenate([r.transmission for r in results], axis=0),
+        radiance=np.concatenate([r.radiance for r in results], axis=0),
+        irradiance=np.concatenate([r.irradiance for r in results], axis=0),
+        pathscatter=np.concatenate([r.pathscatter for r in results], axis=0),
+        time=time,
+        wavelength_nm=results[0].wavelength_nm,
+        angle_deg=results[0].angle_deg,
+    )
 
 
 def loopangle(c1: dict[str, Any]):
@@ -117,14 +170,23 @@ def loopangle(c1: dict[str, Any]):
     loop over "ANGLE"
     """
     angles = np.atleast_1d(c1["angle"])
-    TR = xarray.Dataset(coords={"wavelength_nm": None, "angle_deg": angles})
+    results = []
 
     for a in angles:
         c = c1.copy()
         c["angle"] = a
-        TR = TR.merge(golowtran(c))
+        results.append(golowtran(c))
 
-    return TR
+    # Concatenate along angle axis
+    return LowtranResult(
+        transmission=np.concatenate([r.transmission for r in results], axis=2),
+        radiance=np.concatenate([r.radiance for r in results], axis=2),
+        irradiance=np.concatenate([r.irradiance for r in results], axis=2),
+        pathscatter=np.concatenate([r.pathscatter for r in results], axis=2),
+        time=results[0].time,
+        wavelength_nm=results[0].wavelength_nm,
+        angle_deg=angles,
+    )
 
 
 def golowtran(c1: dict[str, Any]):
@@ -179,19 +241,12 @@ def golowtran(c1: dict[str, Any]):
         c1["range_km"],
     )
 
-    dims = ("time", "wavelength_nm", "angle_deg")
-    TR = xarray.Dataset(
-        {
-            "transmission": (dims, Tx[:, 9][None, :, None]),
-            "radiance": (dims, sumvv[None, :, None]),
-            "irradiance": (dims, irrad[:, 0][None, :, None]),
-            "pathscatter": (dims, irrad[:, 2][None, :, None]),
-        },
-        coords={
-            "time": [c1["time"]],
-            "wavelength_nm": Alam * 1e3,
-            "angle_deg": [c1["angle"]],
-        },
+    return LowtranResult(
+        transmission=Tx[:, 9][None, :, None],
+        radiance=sumvv[None, :, None],
+        irradiance=irrad[:, 0][None, :, None],
+        pathscatter=irrad[:, 2][None, :, None],
+        time=np.array([c1["time"]]),
+        wavelength_nm=Alam * 1e3,
+        angle_deg=np.array([c1["angle"]]),
     )
-
-    return TR
